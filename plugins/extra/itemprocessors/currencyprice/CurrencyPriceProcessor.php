@@ -5,10 +5,10 @@
  *
  * Needs this extension to work: http://innoexts.com/currency-pricing/
  *
- * @author mblarsen
+ * @author mblarsen@gmail.com
  *
  */
-class currencypriceprocessor extends Magmi_ItemProcessor
+class CurrencyPriceProcessor extends Magmi_ItemProcessor
 {
     const MODE_ROWS    = 1; // currency, price
     const MODE_COLUMNS = 2; // price_USD, price_DKK
@@ -18,15 +18,17 @@ class currencypriceprocessor extends Magmi_ItemProcessor
     protected $_allowed_currencies = [];
     protected $_early_fail         = false;
     protected $_singlestore        = 0;
-    // catalog/price/scope 0       = global, 1=website
-    protected $__pricescope        = 2;
+    // catalog/price/scope  0 = global, 1=website
+    protected $_pricescope         = 2;
+    protected $_store_column_name;
+    protected $_websites;
 
     public function getPluginInfo()
     {
         return [
             "name"    => "Currency Price importer",
-            "author"  => "mblarsen",
-            "version" => "0.2.0"
+            "author"  => "mblarsen@gmail.com",
+            "version" => "0.3.0"
         ];
     }
 
@@ -49,33 +51,48 @@ class currencypriceprocessor extends Magmi_ItemProcessor
      */
     public function processItemAfterId(&$item, $params = null)
     {
-        // catacatalog_product_compound_price_product_compound_price
+        // catalog_product_compound_price_product_compound_price
         // catalog_product_compound_special_price
         $sku     = $params["product_id"];
         $table   = $this->tablename("catalog_product_compound_price");
-        $website = isset($item["website"]) && !empty($item["website"]) ? $item["website"] : 0;
         $prices  = $this->getPrices($item);
 
-        if (count($prices)) {
-            $sql = "INSERT INTO $table (product_id, currency, website_id, price) VALUES " .
-                join(",\n", array_fill(0, count($prices), "(?, ?, ?, ?)")) . "\n" .
-                "ON DUPLICATE KEY UPDATE `price`= VALUES(`price`)";
-
-            $bind = [];
-            foreach ($prices as $price_currency_set) {
-                list($price, $currency) = $price_currency_set;
-                $bind[] = $sku;
-                $bind[] = $currency;
-                $bind[] = $website;
-                $bind[] = $price;
+        $code_map      = $this->_websites;
+        $website_codes = isset($item[$this->_store_column_name]) && !empty($item[$this->_store_column_name]) ? preg_split('/,\s*', $item[$this->_store_column_name]) : [ "admin" ];
+        $website_ids   = array_filter(array_map(function ($code) use ($code_map) {
+            if (isset($code_map[$code])) {
+                return $code_map[$code_map]
             }
+            return null;
+        }, $website_codes));
+        
+        if (count($website_codes) !== count($website_ids)) {
+            $diff = array_diff($website_codes, array_values($code_map));
+            $this->log("Unknown websites (skipped): ", join(", ", $diff), "error");
+        }
 
-            $this->insert($sql, $bind);
+        foreach ($website_ids as $website_id) {
+            if (count($prices)) {
+                $sql = "INSERT INTO $table (product_id, currency, website_id, price) VALUES " .
+                    join(",\n", array_fill(0, count($prices), "(?, ?, ?, ?)")) . "\n" .
+                    "ON DUPLICATE KEY UPDATE `price`= VALUES(`price`)";
+
+                $bind = [];
+                foreach ($prices as $price_currency_set) {
+                    list($price, $currency) = $price_currency_set;
+                    $bind[] = $sku;
+                    $bind[] = $currency;
+                    $bind[] = $website_id;
+                    $bind[] = $price;
+                }
+
+                $this->insert($sql, $bind);
+            }
         }
 
         return true;
     }
-    
+
     private function getPrices($item)
     {
         if (self::MODE_ROWS === $this->_mode) {
@@ -93,11 +110,26 @@ class currencypriceprocessor extends Magmi_ItemProcessor
 
     public function processColumnList(&$cols, $params = null)
     {
+        // Determine store column name. In case both store and website is present use website
+        // website seems to be deprecating, but since it is still used that column would contain
+        // the correct value.
+        // Defaults to "store"
+        $store_column_name = null;
+        foreach ($cols as $col) {
+            if (in_array($col, [ "store", "website" ]) {
+                $store_column_name = $col;
+                if ($col === "website") {
+                    break;
+                }
+            }
+        }
+        $this->_store_column_name = empty($store_column_name) ? "store" : $store_column_name;
+        
         $this->_mode = self::MODE_COLUMNS;
         if (in_array("currency", $cols)) {
             $this->_mode = self::MODE_ROWS;
         }
-        
+
         $this->log("Setting currency mode: " . ($this->_mode === self::MODE_COLUMNS ? "columns" : "rows"), "info");
 
         if (self::MODE_COLUMNS === $this->_mode) {
@@ -144,9 +176,17 @@ class currencypriceprocessor extends Magmi_ItemProcessor
         if ($store_count == 1) {
             $this->_singlestore = 1;
         }
-        
+
         // Price scope
         $sql = "SELECT value FROM " . $this->tablename("core_config_data") . " WHERE path = ?";
         $this->_pricescope = intval($this->selectOne($sql, array("catalog/price/scope"), "value"));
+        
+        // Load all websites
+        $sql = "SELECT website_id AS id, code FROM " . $this->tablename("core_website");
+        $websites = $this->selectAll($sql, null, "code");
+        $this->_websites = array_reduce($websites, function ($result, $site) {
+            $result[$site["id"]] = $site["code"];
+            return $result;
+        } $callback, []);
     }
 }
