@@ -34,7 +34,8 @@ If one column is found matching the pattern `price_<CURRENCY>` mode is switched 
 
 ## Columns
 
-* `store|website` (optional) - comma separated list website codes. Default: admin
+* `website` (optional) - comma separated list website codes. Default: admin
+* `store` (optional) - comma separated list store codes. Default: admin
 * `sku` - _sku_ of product to update
 
 For _row_ mode, these are required:
@@ -49,6 +50,10 @@ For _column_ mode any number of columns with this syntax:
 Note: _row_ mode columns will be ignored when in _column_ mode
 
 ## Change log
+
+### 0.3.2
+
+* Bugfix: column website is named websites, would find nothing before
 
 ### 0.3.1
 
