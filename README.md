@@ -50,6 +50,10 @@ Note: _row_ mode columns will be ignored when in _column_ mode
 
 ## Change log
 
+### 0.3.1
+
+* Bugfixes
+
 ### 0.3.0
 
 * Support for `store` or `website` column (synonyms).

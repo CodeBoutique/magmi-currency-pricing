@@ -28,7 +28,7 @@ class CurrencyPriceProcessor extends Magmi_ItemProcessor
         return [
             "name"    => "Currency Price importer",
             "author"  => "mblarsen@gmail.com",
-            "version" => "0.3.0"
+            "version" => "0.3.1"
         ];
     }
 
@@ -61,7 +61,7 @@ class CurrencyPriceProcessor extends Magmi_ItemProcessor
         $website_codes = isset($item[$this->_store_column_name]) && !empty($item[$this->_store_column_name]) ? preg_split('/,\s*', $item[$this->_store_column_name]) : [ "admin" ];
         $website_ids   = array_filter(array_map(function ($code) use ($code_map) {
             if (isset($code_map[$code])) {
-                return $code_map[$code_map]
+                return $code_map[$code];
             }
             return null;
         }, $website_codes));
@@ -116,7 +116,7 @@ class CurrencyPriceProcessor extends Magmi_ItemProcessor
         // Defaults to "store"
         $store_column_name = null;
         foreach ($cols as $col) {
-            if (in_array($col, [ "store", "website" ]) {
+            if (in_array($col, [ "store", "website" ])) {
                 $store_column_name = $col;
                 if ($col === "website") {
                     break;
@@ -187,6 +187,6 @@ class CurrencyPriceProcessor extends Magmi_ItemProcessor
         $this->_websites = array_reduce($websites, function ($result, $site) {
             $result[$site["id"]] = $site["code"];
             return $result;
-        } $callback, []);
+        }, []);
     }
 }
